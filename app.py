@@ -39,19 +39,27 @@ TIER_RANGE = {'MAX': '$38–50M', 'STAR': '$25–38M', 'STARTER': '$13–25M',
 
 # ── Model ──────────────────────────────────────────────────────────────────────
 
+ROLE_SPACING_IDX  = 21
+ROLE_CREATION_IDX = 22
+
 class SynergyNet(nn.Module):
-    def __init__(self, n_feats=21, embed_dim=64, n_heads=4, dropout=(0.3, 0.2)):
+    def __init__(self, n_feats=23, embed_dim=64, n_heads=4, dropout=(0.3, 0.2)):
         super().__init__()
         d0, d1 = dropout
         self.phi = nn.Sequential(
             nn.Linear(n_feats, embed_dim), nn.LayerNorm(embed_dim),
             nn.ReLU(), nn.Dropout(d0))
-        self.attn      = nn.MultiheadAttention(embed_dim, n_heads, dropout=d1, batch_first=True)
-        self.attn_norm = nn.LayerNorm(embed_dim)
-        self.ff        = nn.Sequential(nn.Linear(embed_dim, embed_dim*2), nn.ReLU(),
-                                       nn.Dropout(d1), nn.Linear(embed_dim*2, embed_dim))
-        self.ff_norm   = nn.LayerNorm(embed_dim)
-        agg_dim = 2*embed_dim + 1
+        self.attn1      = nn.MultiheadAttention(embed_dim, n_heads, dropout=d1, batch_first=True)
+        self.attn1_norm = nn.LayerNorm(embed_dim)
+        self.ff1        = nn.Sequential(nn.Linear(embed_dim, embed_dim*2), nn.ReLU(),
+                                        nn.Dropout(d1), nn.Linear(embed_dim*2, embed_dim))
+        self.ff1_norm   = nn.LayerNorm(embed_dim)
+        self.attn2      = nn.MultiheadAttention(embed_dim, n_heads, dropout=d1, batch_first=True)
+        self.attn2_norm = nn.LayerNorm(embed_dim)
+        self.ff2        = nn.Sequential(nn.Linear(embed_dim, embed_dim*2), nn.ReLU(),
+                                        nn.Dropout(d1), nn.Linear(embed_dim*2, embed_dim))
+        self.ff2_norm   = nn.LayerNorm(embed_dim)
+        agg_dim = 2*embed_dim + 1 + 3
         def head():
             return nn.Sequential(nn.Linear(agg_dim, embed_dim), nn.ReLU(), nn.Dropout(d1),
                                  nn.Linear(embed_dim, 32), nn.ReLU(), nn.Linear(32, 1))
@@ -59,11 +67,20 @@ class SynergyNet(nn.Module):
         self.def_head = head()
 
     def forward(self, x_players, x_season):
+        spacing  = x_players[:, :, ROLE_SPACING_IDX]
+        creation = x_players[:, :, ROLE_CREATION_IDX]
         h = self.phi(x_players)
-        attn_out, _ = self.attn(h, h, h)
-        h = self.attn_norm(h + attn_out)
-        h = self.ff_norm(h + self.ff(h))
-        agg = torch.cat([h.mean(1), h.max(1).values, x_season], dim=1)
+        attn_out, _ = self.attn1(h, h, h)
+        h = self.attn1_norm(h + attn_out)
+        h = self.ff1_norm(h + self.ff1(h))
+        attn_out, _ = self.attn2(h, h, h)
+        h = self.attn2_norm(h + attn_out)
+        h = self.ff2_norm(h + self.ff2(h))
+        max_creator       = creation.max(dim=1).values
+        avg_spacing       = spacing.mean(dim=1)
+        creator_x_spacing = max_creator * avg_spacing
+        interact = torch.stack([max_creator, avg_spacing, creator_x_spacing], dim=1)
+        agg = torch.cat([h.mean(1), h.max(1).values, x_season, interact], dim=1)
         return self.off_head(agg).squeeze(-1), self.def_head(agg).squeeze(-1)
 
 
@@ -71,15 +88,15 @@ class SynergyNet(nn.Module):
 
 @st.cache_resource
 def load_models():
-    with open(ARTIFACTS / 'syn_target_stats.pkl', 'rb') as f:
+    with open(ARTIFACTS / 'syn_v2_target_stats.pkl', 'rb') as f:
         ts = pickle.load(f)
-    with open(ARTIFACTS / 'syn_player_scaler.pkl', 'rb') as f:
+    with open(ARTIFACTS / 'syn_v2_player_scaler.pkl', 'rb') as f:
         ps = pickle.load(f)
     off_models, def_models = [], []
     for seed in range(N_SEEDS):
-        for lst, prefix, use_off in [(off_models, 'off', True), (def_models, 'def', False)]:
+        for lst, prefix in [(off_models, 'off'), (def_models, 'def')]:
             m = SynergyNet()
-            m.load_state_dict(torch.load(ARTIFACTS / f'syn_{prefix}_seed{seed}.pt',
+            m.load_state_dict(torch.load(ARTIFACTS / f'syn_v2_{prefix}_seed{seed}.pt',
                                          weights_only=True))
             m.eval()
             lst.append(m)
@@ -114,11 +131,20 @@ def tier_label(price: float) -> str:
 
 # ── Prediction ─────────────────────────────────────────────────────────────────
 
+_IDX_FG3A    = PLAYER_STAT_COLS.index('FG3A')
+_IDX_TS_PCT  = PLAYER_STAT_COLS.index('TS_PCT')
+_IDX_USG_PCT = PLAYER_STAT_COLS.index('USG_PCT')
+_IDX_AST_PCT = PLAYER_STAT_COLS.index('AST_PCT')
+
 @torch.no_grad()
 def predict_lineup(player_rows, season_year, off_models, def_models, ts, ps):
     scaler = ps['scaler']
     yr_mean, yr_std = ps['yr_mean'], ps['yr_std']
-    mat_sc = scaler.transform(np.stack(player_rows))
+    mat = np.stack(player_rows)                          # (5, 21)
+    spacing  = (mat[:, _IDX_FG3A]   * mat[:, _IDX_TS_PCT ]).reshape(-1, 1)
+    creation = (mat[:, _IDX_USG_PCT] * mat[:, _IDX_AST_PCT]).reshape(-1, 1)
+    mat23 = np.hstack([mat, spacing, creation])          # (5, 23)
+    mat_sc = scaler.transform(mat23)
     X_pl = torch.tensor(mat_sc, dtype=torch.float32).unsqueeze(0)
     yr_s = torch.tensor([[(season_year - yr_mean) / yr_std]], dtype=torch.float32)
     off = float(np.mean([m(X_pl, yr_s)[0].item() * ts['off_std'] + ts['off_mean']
@@ -391,8 +417,6 @@ def main():
                 [p.loc[p['PLAYER_ID'] == pid, PLAYER_STAT_COLS].values[0] for pid in lineup_ids],
                 int(season[:4]), off_models, def_models, ts, ps)
 
-            avg_ind_net = lineup_rows['NET'].mean()
-            syn_delta   = pred['net'] - avg_ind_net
             nc = net_color(pred['net'])
 
             st.markdown(
@@ -406,27 +430,6 @@ def main():
                 f'OFF {pred["off"]:.1f} &nbsp;·&nbsp; DEF {pred["def"]:.1f}</div>'
                 f'</div>',
                 unsafe_allow_html=True)
-
-            syn_color = '#27ae60' if syn_delta >= 0 else '#e74c3c'
-            st.markdown(
-                f"""<div style="display:flex;justify-content:space-between;
-                    text-align:center;margin-top:8px;gap:6px;">
-                  <div style="flex:1;border:1px solid rgba(128,128,128,0.2);
-                              border-radius:8px;padding:10px 4px;">
-                    <div style="font-size:0.68em;font-weight:600;letter-spacing:0.06em;
-                                text-transform:uppercase;opacity:0.5;">Avg Individual</div>
-                    <div style="font-size:1.15em;font-weight:700;">{avg_ind_net:+.1f}</div>
-                  </div>
-                  <div style="flex:1;background:{_rgba(syn_color,0.08)};
-                              border:1px solid {_rgba(syn_color,0.4)};
-                              border-radius:8px;padding:10px 4px;">
-                    <div style="font-size:0.68em;font-weight:600;letter-spacing:0.06em;
-                                text-transform:uppercase;opacity:0.5;">Synergy Delta</div>
-                    <div style="font-size:1.15em;font-weight:700;color:{syn_color};">{syn_delta:+.1f}</div>
-                  </div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
 
             verdict_text, verdict_color = (
                 ('Elite lineup',   '#27ae60') if pred['net'] >= 12 else
