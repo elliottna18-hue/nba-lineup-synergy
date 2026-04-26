@@ -30,6 +30,10 @@ python analyze_results.py  # generate all figures
 
 > Pre-trained model artifacts are already included in `artifacts/`, so you can run the app and CLI tool without re-training.
 
+## Live App
+
+[https://nba-lineup-synergy-gfkpgtmkyztnsfndohokuv.streamlit.app/](https://nba-lineup-synergy-gfkpgtmkyztnsfndohokuv.streamlit.app/)
+
 ## Video Links
 
 - **Demo video:** [TBD — add link after recording]
