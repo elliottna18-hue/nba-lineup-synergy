@@ -37,7 +37,7 @@ python analyze_results.py  # generate all figures
 ## Video Links
 
 - **Demo video:** [https://youtu.be/EQizMSiCsFs](https://youtu.be/EQizMSiCsFs)
-- **Technical walkthrough:** [https://youtu.be/pnW89wsZZu0](https://youtu.be/pnW89wsZZu0)
+- **Technical walkthrough:** [https://youtu.be/djdJkQff1vI](https://youtu.be/djdJkQff1vI)
 
 ## Evaluation
 
