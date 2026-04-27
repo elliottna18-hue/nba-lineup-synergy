@@ -12,3 +12,7 @@ data/model_ready/
 # scripts not needed for deployment
 demo_script.md
 walkthrough_script.md
+
+# personal/tooling files
+.claude/
+self_assessment_template.docx
