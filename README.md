@@ -36,8 +36,8 @@ python analyze_results.py  # generate all figures
 
 ## Video Links
 
-- **Demo video:** [TBD — add link after recording]
-- **Technical walkthrough:** [TBD — add link after recording]
+- **Demo video:** [https://youtu.be/EQizMSiCsFs](https://youtu.be/EQizMSiCsFs)
+- **Technical walkthrough:** [https://youtu.be/pnW89wsZZu0](https://youtu.be/pnW89wsZZu0)
 
 ## Evaluation
 
