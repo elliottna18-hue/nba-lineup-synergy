@@ -35,7 +35,7 @@ SYN_HIST_DEF = Path('artifacts/syn_history_def.csv')
 df = pd.read_csv(RESULTS)
 
 MODEL_ORDER = ['GlobalMean', 'MeanPlayerRating', 'Ridge', 'Ridge+SynFeats',
-               'NeuralNet', 'DeepSets', 'SynergyNet']
+               'NeuralNet', 'DeepSets', 'SynergyNet', 'SynergyNetV2']
 COLORS = {
     'GlobalMean':      '#aaaaaa',
     'MeanPlayerRating':'#888888',
@@ -44,6 +44,7 @@ COLORS = {
     'NeuralNet':       '#f28e2b',
     'DeepSets':        '#76b7b2',
     'SynergyNet':      '#e15759',
+    'SynergyNetV2':    '#b07aa1',
 }
 
 val = df[df['split'] == 'val'].copy()
@@ -258,7 +259,7 @@ print()
 print('KEY DELTAS (vs. Ridge baseline, val set):')
 ridge_off = val[(val['model']=='Ridge') & (val['target']=='OFF_RATING')]['MAE'].values[0]
 ridge_def = val[(val['model']=='Ridge') & (val['target']=='DEF_RATING')]['MAE'].values[0]
-for model in ['Ridge+SynFeats', 'NeuralNet', 'DeepSets', 'SynergyNet']:
+for model in ['Ridge+SynFeats', 'NeuralNet', 'DeepSets', 'SynergyNet', 'SynergyNetV2']:
     sub = val[val['model'] == model]
     if sub.empty: continue
     off = sub[sub['target']=='OFF_RATING']['MAE'].values

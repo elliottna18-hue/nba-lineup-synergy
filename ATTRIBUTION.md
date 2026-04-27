@@ -19,7 +19,8 @@ This project was built with substantial assistance from **Claude Code (Anthropic
 
 - **`collect_data.py`** — Initial structure generated with Claude Code and Claude Code also helped generate API call syntax.
 - **`clean_data.py`, `build_features.py`, `preprocess.py`** — Scaffolding generated with Claude Code‚ I then implemented deisgn choices.
-- **`train_synergy.py`** — Claude Code implemented the MultiheadAttention block, residual connections, LayerNorm, and training loop. 
+- **`train_synergy.py`** — Claude Code implemented the MultiheadAttention block, residual connections, LayerNorm, and training loop.
+- **`train_synergy_v2.py`** — Claude Code scaffolded the two-layer Transformer encoder and role-feature additions (spacing_score, creation_score); I designed the creator × spacer interaction hypothesis and chose what features to add.
 - **`app.py`** — Initial app structure generated with Claude Code. UI designed by Claude Code with several iterations and changes based on my input.
 - **`predict.py`** — CLI tool generated with Claude Code.
 - **`analyze_results.py`** — Figure generation code scaffolded with Claude Code.
